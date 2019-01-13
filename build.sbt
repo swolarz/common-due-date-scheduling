@@ -1,0 +1,5 @@
+name := "Common Due Date Scheduling"
+
+version := "0.1"
+
+scalaVersion := "2.12.7"
