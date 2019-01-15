@@ -24,7 +24,7 @@ class SummaryTableExporter(private var exportPath: String = "./results") {
       summaries foreach { summary =>
         val formattedErrorRate = BigDecimal(summary.errorRate).setScale(4, RoundingMode.HALF_UP).toString
         val formattedExecutionTime = BigDecimal(summary.executionMillis).setScale(6, RoundingMode.HALF_UP).toString
-        output.println(s"${summary.n};${summary.h};${summary.k};${summary.upperBound};${summary.schedulingPenalty};${formattedErrorRate};${formattedExecutionTime}")
+        output.println(s"${summary.n};${summary.h};${summary.k};${summary.r};${summary.upperBound};${summary.schedulingPenalty};$formattedErrorRate;$formattedExecutionTime")
       }
     }
   }

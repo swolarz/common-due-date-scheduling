@@ -1,24 +1,16 @@
-package scheduler
+package scheduler.genetic
+
+import java.util.concurrent.ThreadLocalRandom
 
 import data.loader.UpperBoundsLoader
 import data.{JobScheduling, ScheduledJob, SchedulingInstance}
+import scheduler.BaseOffsetScheduler
 
 import scala.collection.immutable.BitSet.BitSetN
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{BitSet, mutable}
 
-class GeneticJobScheduler(val populationSize: Int = 100, val execMillis: Long = 30 * 1000, val measure: Boolean = false) extends BaseOffsetScheduler {
-
-  private class Genotype(val mask: BitSet, var momentum: Int = -1) {
-    var penalty: Int = -1
-    var midJobId: Int = -1
-    var ttl: Int = -1
-
-    def invalid(): Boolean = momentum < 0
-    def valid(): Boolean = !invalid()
-    def notCalculated(): Boolean = penalty < 0
-  }
-
+class GeneticJobScheduler(val populationSize: Int = 500, val execMillis: Long = 30 * 1000) extends BaseOffsetScheduler {
   private val upperBounds = new UpperBoundsLoader
 
   private var aOrdered = Array.empty[ScheduledJob]
@@ -35,52 +27,96 @@ class GeneticJobScheduler(val populationSize: Int = 100, val execMillis: Long = 
   }
 
   private def geneticSearch(instance: SchedulingInstance, n: Int, deadline: Int): JobScheduling = {
+    val upperBound = upperBounds.getUpperBound(instance)
+    val progress = new GenerationProgress(instance, upperBound, execMillis)
+
     val startMillis = System.currentTimeMillis()
 
-    val population = initPopulation(instance, n, deadline)
+    var population = initPopulation(instance, n, deadline)
     var legend = population.head
 
-    while (System.currentTimeMillis() - startMillis < execMillis) {
+    var millis = 0L
+    var generation = 0
+
+    calculatePenalties(population, deadline)
+
+    progress.update(generation, legend.penalty, 0, population.length)
+    progress.display()
+
+    while (millis < execMillis) {
+      population = replication(population, n)
 
       calculatePenalties(population, deadline)
+      population = limitPopulation(population)
+      populationAging(population)
 
       val leader = population.minBy(_.penalty)
       if (leader.penalty < legend.penalty)
         legend = leader
 
+      millis = System.currentTimeMillis() - startMillis
+      generation += 1
 
+      progress.update(generation, leader.penalty, millis, population.length)
+      progress.display()
     }
+
+    progress.finish()
 
     val orderedJobs = orderJobs(legend.mask, legend.midJobId)
     makeSchedulingWithOffset(instance, orderedJobs)
   }
 
-  private def crossover()
+  private def replication(population: Array[Genotype], n: Int): Array[Genotype] = {
+    val crossed = crossover(population, n)
+    val mutated = mutation(population, n)
+
+    population ++ crossed ++ mutated
+  }
+
+  private def crossover(population: Array[Genotype], n: Int): Array[Genotype] = {
+    val ordered = population.sortBy(gen => (gen.penalty, gen.momentum))
+
+    ordered.zipWithIndex.drop(1).par.map { case (gen, i) =>
+      val rand = ThreadLocalRandom.current
+      val withPos = rand.nextInt(i)
+
+      Genotype.cross(ordered(withPos), gen, n)
+    }.toArray
+  }
+
+  private def mutation(population: Array[Genotype], n: Int): Array[Genotype] = {
+    population.par.map(gen => Genotype.mutate(gen, n)).toArray
+  }
 
   private def calculatePenalties(population: Array[Genotype], deadline: Int): Unit = {
     population.filter(_.notCalculated()).par.foreach { gen =>
       val (pen, mid) = calculatePenalty(gen.mask, deadline)
-
-      gen.penalty = pen
-      gen.midJobId = mid
-
-      if (pen != Int.MaxValue)
-        gen.momentum = -1
+      gen.apply(pen, mid)
     }
   }
 
-  private def limitPopulation(population: Array[Genotype]): Unit = {
-    val valid = population.filter(_.valid())
+  private def limitPopulation(newPopulation: Array[Genotype]): Array[Genotype] = {
+    val population = newPopulation.filter(!_.tooOld())
+    val valid = withoutDuplicates(population.filter(_.valid()))
     val invalid = population.filter(_.invalid())
 
-    valid.take(populationSize)
-    invalid.take(populationSize)
-
-    valid ++ invalid
+    valid.take(populationSize) ++ invalid.take(populationSize)
   }
 
-  private def increaseMomentum(population: Array[Genotype]): Unit = {
-    population.filter(_.invalid()).foreach(gen => gen.momentum = (gen.momentum * 1.05).toInt)
+  private def withoutDuplicates(population: Array[Genotype]): Array[Genotype] = {
+    val groups = population.sortBy(gen => (gen.penalty, gen.ttl)).groupBy(gen => gen.penalty)
+
+    groups.par.map { case (pen, gens) =>
+      gens.zipWithIndex.filterNot { case (gen, i) =>
+        (0 until i).map(j => gens(j)).exists(pgen => Genotype.same(gen, pgen))
+      }.map(_._1)
+    }.toArray.flatten
+  }
+
+  private def populationAging(population: Array[Genotype]): Unit = {
+    population.filter(_.invalid()).foreach(_.increaseMomentum())
+    population.foreach(_.increaseAge())
   }
 
   private def initPopulation(instance: SchedulingInstance, n: Int, d: Int): Array[Genotype] = {

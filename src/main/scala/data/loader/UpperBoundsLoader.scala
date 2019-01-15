@@ -3,6 +3,7 @@ package data.loader
 import java.io.InputStream
 import java.util.Scanner
 
+import data.SchedulingInstance
 import data.util.InstancesInfo._
 
 class UpperBoundsLoader {
@@ -10,6 +11,8 @@ class UpperBoundsLoader {
 
   private val upperBounds = Array.ofDim[Int](nValues.length, kValues.length, hValues.length)
   private val loaded = Array.ofDim[Boolean](nValues.length)
+
+  def getUpperBound(instance: SchedulingInstance): Int = getUpperBound(instance.jobs.length, instance.k, instance.h)
 
   def getUpperBound(n: Int, k: Int, h: Double): Int = {
     val nIx = nValues.indexOf(n)

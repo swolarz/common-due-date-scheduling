@@ -3,7 +3,8 @@ import data.export.SummaryTableExporter
 import data.loader.{DataLoader, UpperBoundsLoader}
 import data.util.InstancesInfo._
 import data.validation.SchedulingValidator
-import scheduler.{DynamicJobScheduler, FastJobScheduler, GeneticJobScheduler, JobScheduler}
+import scheduler.genetic.GeneticJobScheduler
+import scheduler.{DynamicJobScheduler, FastJobScheduler, JobScheduler}
 
 object SummaryApplication {
 
@@ -16,7 +17,7 @@ object SummaryApplication {
     val schedulingValidator = new SchedulingValidator
 
     try {
-      Array(50) foreach { n =>
+      nValues foreach { n =>
         hValues foreach { h =>
           kValues foreach { k =>
             val instance = dataLoader.loadInstance(n, k, h)
@@ -26,7 +27,7 @@ object SummaryApplication {
             val scheduling = scheduler.schedule(instance)
             val endNano = System.nanoTime()
 
-            val summary = SchedulingSummary(n, h, k, upperBound, scheduling.getPenalty, (endNano - startNano).toDouble / 1000000)
+            val summary = SchedulingSummary(n, h, k, scheduling.offset, upperBound, scheduling.getPenalty, (endNano - startNano).toDouble / 1000000)
             tableExporter.addSummary(summary)
 
             val correct = schedulingValidator.validate(scheduling)

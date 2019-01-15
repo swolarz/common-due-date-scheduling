@@ -3,7 +3,8 @@ import java.io.PrintStream
 import data.SchedulingInstance
 import data.export.SchedulingExporter
 import data.loader.{DataLoader, UpperBoundsLoader}
-import scheduler.{DynamicJobScheduler, FastJobScheduler, GeneticJobScheduler, JobScheduler}
+import scheduler.genetic.GeneticJobScheduler
+import scheduler.{DynamicJobScheduler, FastJobScheduler, JobScheduler}
 
 object SchedulerApplication {
   val debug = false
