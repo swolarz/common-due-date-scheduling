@@ -37,7 +37,7 @@ object SchedulerApplication {
       val penalty = scheduling.getPenalty
       val error = (penalty - upperBound).toDouble / upperBound
 
-      println(f"Result scheduling penalty = $penalty, upperBound = $upperBound error = ${error * 100}%.3f%%")
+      println(f"Result scheduling penalty = $penalty, r = ${scheduling.offset}, upperBound = $upperBound error = ${error * 100}%.3f%%")
 
       val exporter = new SchedulingExporter
       exporter.export(scheduling)
